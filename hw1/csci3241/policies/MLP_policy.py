@@ -73,6 +73,7 @@ class MLPPolicySL(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
     update:
         Trains the policy with a supervised learning objective
     """
+
     def __init__(self,
                  ac_dim,
                  ob_dim,
@@ -124,12 +125,19 @@ class MLPPolicySL(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
         :return:
             action: sampled action(s) from the policy
         """
+        # TODO: implement the forward pass of the network.
+        # You can return anything you want, but you should be able to differentiate
+        # through it. For example, you can return a torch.FloatTensor. You can also
+        # return more flexible objects, such as a
+        # `torch.distributions.Distribution` object. It's up to you!
         observation = observation.float().to(ptu.device)
-        mean_action = self.mean_net(observation)
+        mean = self.mean_net(observation)
         std = torch.exp(self.logstd)
-        action_distribution = distributions.Normal(mean_action, std)
-        sampled_action = action_distribution.rsample()
-        return sampled_action
+        dist = distributions.Normal(mean, std)
+        action = dist.rsample()  # test rsample() & sample()
+        # test `get action operation` whether need under `torch.no_grad()`
+        # convert tensor to numpy
+        return action
 
     def update(self, observations, actions):
         """
@@ -141,45 +149,20 @@ class MLPPolicySL(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
             dict: 'Training Loss': supervised learning loss
         """
         # TODO: update the policy and return the loss
-        '''
-        1. Call self.forward(observations) that uses the policy model to predict actions based on the given observations.
-        2. Use mse_loss from torch.nn, "functional" package to compute the loss based on predicted actions and input target actions
-        3. Reset the gradients of all the model parameters to zero in self.optimizer
-        4. Backward the loss
-        5. Update model parameters for self.optimizer using step
-        6. return the training loss
-        '''
-        loss = TODO
-        return {
-            # You can add extra logging information here, but keep this line
-            'Training Loss': ptu.to_numpy(loss),
-        }
-    
-    def get_action(self, observation: np.ndarray) -> np.ndarray:
-        observation = torch.tensor(
-            observation, dtype=torch.float32).to(ptu.device)
-        with torch.no_grad():
-            action = ptu.to_numpy(self.forward(observation))
-        return action
-    
-
-    def update(self, observations, actions):
-        # Predict actions for the given observations
-        predicted_actions = self.forward(observations)
-
-        # Compute the Mean Squared Error loss between the predicted and target actions
-        loss = F.mse_loss(predicted_actions, actions)
-
-        # Zero the gradients before backpropagation
         self.optimizer.zero_grad()
-
-        # Backpropagate the loss
+        action_pred = self.forward(observations)
+        # print(f'action shape: {action_pred.shape}')
+        # print(f'truth shape: {actions.shape}')
+        loss = F.mse_loss(action_pred, actions)
         loss.backward()
-
-        # Perform a step of optimization
         self.optimizer.step()
-
         return {
             # You can add extra logging information here, but keep this line
             'Training Loss': ptu.to_numpy(loss),
         }
+
+    def get_action(self, obs: np.ndarray) -> np.ndarray:
+        obs = torch.tensor(obs, dtype=torch.float32).to(ptu.device)
+        with torch.no_grad():
+            action = ptu.to_numpy(self.forward(obs))
+        return action
